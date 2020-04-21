@@ -42,7 +42,7 @@ spec:
 While this is quite a clever use of a Go template, it has several problems.
 
 1) The code is included in an annotation for the user's custom resource. This is fragile and ugly.
-1) The code includes the name of a listener. If a different listener name is being used, the code is incorrect.
+1) The code includes the name of a listener. If a different listener type is being used, the code is incorrect.
 1) The code picks just the first of the array of addresses. It's common Kafka practice to have a list of bootstrap servers, and while Strimzi usually only has a single bootstrap address per listener, it is still necessary for the user to concatenate the `host:port` pair.
 
 What would be better is to annotate the Strimzi objects in a way that enabled the Service Binding Operator to populate the binding information itself. The user should only really need to refer to the `Kafka` in their `ServiceBindingRequest` and let the SBO take care of the details of the binding.
@@ -222,7 +222,7 @@ spec:
     resourceRef: my-cluster
 ```
 
-The consuming client needs to know the listener name.
+The consuming client needs to know the listener type.
 
 The Service Binding Operator creates binding information which contains:
 
@@ -306,7 +306,7 @@ spec:
     resourceRef: my-cluster
 ```
 
-The consuming client needs to know the listener name and also the keys for the CA certificate secret fields for the certificate and password.
+The consuming client needs to know the listener type and also the keys for the CA certificate secret fields for the certificate and password.
 
 The Service Binding Operator creates binding information which contains:
 
@@ -419,7 +419,7 @@ spec:
 
 There are of course two secrets now, the CA certificate secret accessed via the `Kafka` CR and the client's password secret accessed via the `KafkaUser` CR.
 
-The consuming client needs to know the listener name, the keys for the CA certificate secret fields for the certificate and password, and the key for the password field in the `KafkaUser` secret.
+The consuming client needs to know the listener type, the keys for the CA certificate secret fields for the certificate and password, and the key for the password field in the `KafkaUser` secret.
 
 TThe Service Binding Operator creates binding information which contains:
 
@@ -535,7 +535,7 @@ spec:
 
 There are of course two secrets now, the CA certificate secret accessed via the `Kafka` CR and the client's certificate secret accessed via the `KafkaUser` CR.
 
-The consuming client needs to know the listener name, the keys for the CA certificate secret fields for the certificate and password, and the keys for the client certificate `KafkaUser` secret for the certificate and password.
+The consuming client needs to know the listener type, the keys for the CA certificate secret fields for the certificate and password, and the keys for the client certificate `KafkaUser` secret for the certificate and password.
 
 The Service Binding Operator creates binding information which contains:
 
@@ -702,7 +702,7 @@ status:
     bootstrap: myhost1.example.com:9092,myhost2.example.com:9092
 ```
 
-Then the binding can use `status.listeners.plain.bootstrap`. If the listener name could be made into a parameter from the `ServiceBindingRequest`, then it would be possible to annotate the CSV for the `Kafka` CRD so that the service binding request would work without needing the user to annotate their custom resource.
+Then the binding can use `status.listeners.plain.bootstrap`. If the listener type could be made into a parameter from the `ServiceBindingRequest`, then it would be possible to annotate the CSV for the `Kafka` CRD so that the service binding request would work without needing the user to annotate their custom resource.
 
 ``` yaml
 apiVersion: operators.coreos/com:v1alpha1
