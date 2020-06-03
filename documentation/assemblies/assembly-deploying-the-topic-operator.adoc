@@ -14,7 +14,7 @@ The Topic Operator manages Kafka topics through custom resources.
 The Topic Operator is deployed:
 
 * link:{BookURLDeploying}#deploying-the-topic-operator-using-the-cluster-operator-{context}[Using the Cluster Operator (recommended)^]
-* link:{BookURLDeploying}#deploying-the-topic-operator-standalone-{context}[Standalone to operate with Kafka clusters not managed by {ProductName}^]
+* link:{BookURLDeploying}#deploying-the-topic-operator-standalone-{context}[Standalone to operate with Kafka clusters not managed by Strimzi^]
 
 :parent-context-deploying: {context}
 :context: deploying
@@ -26,7 +26,5 @@ include::../modules/con-topic-operator-cluster-label.adoc[leveloffset=+1]
 include::../modules/con-how-the-topic-operator-works.adoc[leveloffset=+1]
 
 include::../modules/proc-topic-operator-with-resource-requests-limits.adoc[leveloffset=+1]
-
-include::../modules/ref-topic-operator-environment.adoc[leveloffset=+1]
 
 :context: {parent-context-deploying}

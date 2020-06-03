@@ -206,7 +206,7 @@ public class KafkaClusterTest {
         assertThat(headful.getSpec().getPorts().get(3).getPort(), is(new Integer(KafkaCluster.METRICS_PORT)));
         assertThat(headful.getSpec().getPorts().get(3).getProtocol(), is("TCP"));
 
-        assertThat(headful.getMetadata().getAnnotations(), is(AbstractModel.mergeLabelsOrAnnotations(kc.getInternalDiscoveryAnnotation(), kc.getPrometheusAnnotations())));
+        assertThat(headful.getMetadata().getAnnotations(), is(AbstractModel.mergeLabelsOrAnnotations(kc.getInternalDiscoveryAnnotation(), kc.prometheusAnnotations())));
 
         assertThat(headful.getMetadata().getLabels().containsKey(Labels.STRIMZI_DISCOVERY_LABEL), is(true));
         assertThat(headful.getMetadata().getLabels().get(Labels.STRIMZI_DISCOVERY_LABEL), is("true"));
@@ -463,7 +463,7 @@ public class KafkaClusterTest {
         // checks on the TLS sidecar
         Container tlsSidecarContainer = containers.get(1);
         assertThat(tlsSidecarContainer.getImage(), is(image));
-        assertThat(AbstractModel.containerEnvVars(tlsSidecarContainer).get(KafkaCluster.ENV_VAR_KAFKA_ZOOKEEPER_CONNECT), is(ZookeeperCluster.serviceName(cluster) + ":2181"));
+        assertThat(AbstractModel.containerEnvVars(tlsSidecarContainer).get(KafkaCluster.ENV_VAR_KAFKA_ZOOKEEPER_CONNECT), is(ZookeeperCluster.serviceName(cluster) + ":" + ZookeeperCluster.CLIENT_TLS_PORT));
         assertThat(AbstractModel.containerEnvVars(tlsSidecarContainer).get(ModelUtils.TLS_SIDECAR_LOG_LEVEL), is(TlsSidecarLogLevel.NOTICE.toValue()));
         assertThat(tlsSidecarContainer.getVolumeMounts().get(0).getName(), is(KafkaCluster.BROKER_CERTS_VOLUME));
         assertThat(tlsSidecarContainer.getVolumeMounts().get(0).getMountPath(), is(KafkaCluster.TLS_SIDECAR_KAFKA_CERTS_VOLUME_MOUNT));

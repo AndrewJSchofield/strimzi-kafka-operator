@@ -103,6 +103,9 @@ public class KafkaBridgeCluster extends AbstractModel {
     protected static final String ENV_VAR_KAFKA_BRIDGE_HTTP_ENABLED = "KAFKA_BRIDGE_HTTP_ENABLED";
     protected static final String ENV_VAR_KAFKA_BRIDGE_HTTP_HOST = "KAFKA_BRIDGE_HTTP_HOST";
     protected static final String ENV_VAR_KAFKA_BRIDGE_HTTP_PORT = "KAFKA_BRIDGE_HTTP_PORT";
+    protected static final String ENV_VAR_KAFKA_BRIDGE_CORS_ENABLED = "KAFKA_BRIDGE_CORS_ENABLED";
+    protected static final String ENV_VAR_KAFKA_BRIDGE_CORS_ALLOWED_ORIGINS = "KAFKA_BRIDGE_CORS_ALLOWED_ORIGINS";
+    protected static final String ENV_VAR_KAFKA_BRIDGE_CORS_ALLOWED_METHODS = "KAFKA_BRIDGE_CORS_ALLOWED_METHODS";
 
     private KafkaBridgeTls tls;
     private KafkaClientAuthentication authentication;
@@ -119,13 +122,13 @@ public class KafkaBridgeCluster extends AbstractModel {
     /**
      * Constructor
      *
-     * @param resource Kubernetes/OpenShift resource with metadata containing the namespace and cluster name
+     * @param resource Kubernetes resource with metadata containing the namespace and cluster name
      */
     protected KafkaBridgeCluster(HasMetadata resource) {
         super(resource, APPLICATION_NAME);
         this.name = KafkaBridgeResources.deploymentName(cluster);
         this.serviceName = KafkaBridgeResources.serviceName(cluster);
-        this.ancillaryConfigName = KafkaBridgeResources.metricsAndLogConfigMapName(cluster);
+        this.ancillaryConfigMapName = KafkaBridgeResources.metricsAndLogConfigMapName(cluster);
         this.replicas = DEFAULT_REPLICAS;
         this.readinessPath = "/ready";
         this.livenessPath = "/healthy";
@@ -155,7 +158,7 @@ public class KafkaBridgeCluster extends AbstractModel {
             image = System.getenv().getOrDefault(ClusterOperatorConfig.STRIMZI_DEFAULT_KAFKA_BRIDGE_IMAGE, "strimzi/kafka-bridge:latest");
         }
         kafkaBridgeCluster.setImage(image);
-        kafkaBridgeCluster.setReplicas(spec.getReplicas() > 0 ? spec.getReplicas() : DEFAULT_REPLICAS);
+        kafkaBridgeCluster.setReplicas(spec.getReplicas());
         kafkaBridgeCluster.setBootstrapServers(spec.getBootstrapServers());
         kafkaBridgeCluster.setKafkaConsumerConfiguration(spec.getConsumer());
         kafkaBridgeCluster.setKafkaProducerConfiguration(spec.getProducer());
@@ -271,7 +274,7 @@ public class KafkaBridgeCluster extends AbstractModel {
 
     protected List<Volume> getVolumes(boolean isOpenShift) {
         List<Volume> volumeList = new ArrayList<>(1);
-        volumeList.add(VolumeUtils.createConfigMapVolume(logAndMetricsConfigVolumeName, ancillaryConfigName));
+        volumeList.add(VolumeUtils.createConfigMapVolume(logAndMetricsConfigVolumeName, ancillaryConfigMapName));
 
         if (tls != null) {
             List<CertSecretSource> trustedCertificates = tls.getTrustedCertificates();
@@ -337,7 +340,7 @@ public class KafkaBridgeCluster extends AbstractModel {
     @Override
     protected List<Container> getContainers(ImagePullPolicy imagePullPolicy) {
 
-        List<Container> containers = new ArrayList<>();
+        List<Container> containers = new ArrayList<>(1);
 
         Container container = new ContainerBuilder()
                 .withName(name)
@@ -376,6 +379,20 @@ public class KafkaBridgeCluster extends AbstractModel {
         varList.add(buildEnvVar(ENV_VAR_KAFKA_BRIDGE_HTTP_HOST, KafkaBridgeHttpConfig.HTTP_DEFAULT_HOST));
         varList.add(buildEnvVar(ENV_VAR_KAFKA_BRIDGE_HTTP_PORT, String.valueOf(http != null ? http.getPort() : KafkaBridgeHttpConfig.HTTP_DEFAULT_PORT)));
 
+        if (http != null && http.getCors() != null) {
+            varList.add(buildEnvVar(ENV_VAR_KAFKA_BRIDGE_CORS_ENABLED, "true"));
+
+            if (http.getCors().getAllowedOrigins() != null) {
+                varList.add(buildEnvVar(ENV_VAR_KAFKA_BRIDGE_CORS_ALLOWED_ORIGINS, String.join(",", http.getCors().getAllowedOrigins())));
+            }
+
+            if (http.getCors().getAllowedMethods() != null) {
+                varList.add(buildEnvVar(ENV_VAR_KAFKA_BRIDGE_CORS_ALLOWED_METHODS, String.join(",", http.getCors().getAllowedMethods())));
+            }
+        } else {
+            varList.add(buildEnvVar(ENV_VAR_KAFKA_BRIDGE_CORS_ENABLED, "false"));
+        }
+
         varList.add(buildEnvVar(ENV_VAR_KAFKA_BRIDGE_AMQP_ENABLED, String.valueOf(amqpEnabled)));
 
         if (tls != null) {
@@ -402,6 +419,9 @@ public class KafkaBridgeCluster extends AbstractModel {
         if (tracing != null) {
             varList.add(buildEnvVar(ENV_VAR_STRIMZI_TRACING, tracing.getType()));
         }
+
+        // Add shared environment variables used for all containers
+        varList.addAll(getSharedEnvVars());
 
         addContainerEnvsToExistingEnvs(varList, templateContainerEnvVars);
 

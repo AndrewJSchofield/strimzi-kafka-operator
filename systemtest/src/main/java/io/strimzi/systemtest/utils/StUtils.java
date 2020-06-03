@@ -6,13 +6,9 @@ package io.strimzi.systemtest.utils;
 
 import com.jayway.jsonpath.JsonPath;
 import io.fabric8.kubernetes.api.model.ConfigMap;
-import io.fabric8.kubernetes.client.CustomResource;
 import io.strimzi.api.kafka.model.ContainerEnvVar;
 import io.strimzi.api.kafka.model.ContainerEnvVarBuilder;
-import io.strimzi.api.kafka.model.status.Condition;
-import io.strimzi.api.kafka.model.status.HasStatus;
 import io.strimzi.systemtest.Environment;
-import io.strimzi.systemtest.utils.kubeUtils.objects.PodUtils;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.apache.logging.log4j.LogManager;
@@ -28,8 +24,8 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static io.strimzi.systemtest.resources.ResourceManager.cmdKubeClient;
 import static io.strimzi.test.k8s.KubeClusterResource.kubeClient;
-import static java.util.Arrays.asList;
 
 public class StUtils {
 
@@ -41,6 +37,9 @@ public class StUtils {
     private static final Pattern IMAGE_PATTERN = Pattern.compile("^(?<org>[^/]*)/(?<image>[^:]*):(?<tag>.*)$");
 
     private static final Pattern VERSION_IMAGE_PATTERN = Pattern.compile("(?<version>[0-9.]+)=(?<image>[^\\s]*)");
+
+    private static final Pattern BETWEEN_JSON_OBJECTS_PATTERN = Pattern.compile("}[\\n\\r]+\\{");
+    private static final Pattern ALL_BEFORE_JSON_PATTERN = Pattern.compile("(.*\\s)}, \\{", Pattern.DOTALL);
 
     private StUtils() { }
 
@@ -203,40 +202,42 @@ public class StUtils {
         return jsonArray;
     }
 
+    /**
+     * Method for checking if JSON format logging is set for the {@code pods}
+     * Steps:
+     * 1. get log from pod
+     * 2. find every occurrence of `}\n{` which will be replaced with `}, {` - by {@link #BETWEEN_JSON_OBJECTS_PATTERN}
+     * 3. replace everything from beginning to the first proper JSON object with `{`- by {@link #ALL_BEFORE_JSON_PATTERN}
+     * 4. also add `[` to beginning and `]` to the end of String to create proper JsonArray
+     * 5. try to parse the JsonArray
+     * @param pods snapshot of pods to be checked
+     * @param containerName name of container from which to take the log
+     * @return if JSON format was set up or not
+     */
     public static boolean checkLogForJSONFormat(Map<String, String> pods, String containerName) {
         boolean isJSON = false;
+        //this is only for decrease the number of records - kafka have record/line, operators record/11lines
+        String tail = "--tail=" + (containerName.contains("operator") ? "50" : "10");
 
         for (String podName : pods.keySet()) {
-            String logs = kubeClient().logs(podName, containerName).replaceFirst("([^{]+)", "");
+            String log = cmdKubeClient().execInCurrentNamespace(false, "logs", podName, "-c", containerName, tail).out();
+            Matcher matcher = BETWEEN_JSON_OBJECTS_PATTERN.matcher(log);
+
+            log = matcher.replaceAll("}, \\{");
+            matcher = ALL_BEFORE_JSON_PATTERN.matcher(log);
+            log = "[" + matcher.replaceFirst("{") + "]";
+
             try {
-                new JsonObject(logs);
+                new JsonArray(log);
                 LOGGER.info("JSON format logging successfully set for {} - {}", podName, containerName);
                 isJSON = true;
             } catch (Exception e) {
+                LOGGER.info(log);
                 LOGGER.info("Failed to set JSON format logging for {} - {}", podName, containerName);
                 isJSON = false;
                 break;
             }
         }
         return isJSON;
-    }
-    /**
-     * Log actual status of custom resource with pods.
-     * @param customResource - Kafka, KafkaConnect etc. - every resource that HasMetadata and HasStatus (Strimzi status)
-     */
-    public static <T extends CustomResource & HasStatus> void logCurrentStatus(T customResource) {
-        String kind = customResource.getKind();
-        String name = customResource.getMetadata().getName();
-
-        List<String> log = new ArrayList<>(asList("\n", kind, " status:\n", "\nConditions:\n"));
-
-        for (Condition condition : customResource.getStatus().getConditions()) {
-            log.add("\tType: " + condition.getType() + "\n");
-            log.add("\tMessage: " + condition.getMessage() + "\n");
-        }
-
-        PodUtils.logCurrentPodStatus(kind, name, log);
-
-        LOGGER.info("{}", String.join("", log));
     }
 }

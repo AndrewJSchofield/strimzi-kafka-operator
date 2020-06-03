@@ -70,7 +70,7 @@ public class KafkaUserModel {
     /**
      * Constructor
      *
-     * @param namespace Kubernetes/OpenShift namespace where Kafka Connect cluster resources are going to be created
+     * @param namespace Kubernetes namespace where Kafka Connect cluster resources are going to be created
      * @param name   User name
      * @param labels   Labels
      */
@@ -134,7 +134,7 @@ public class KafkaUserModel {
      */
     public Secret generateSecret()  {
         if (authentication instanceof KafkaUserTlsClientAuthentication) {
-            Map<String, String> data = new HashMap<>();
+            Map<String, String> data = new HashMap<>(5);
             data.put("ca.crt", caCert);
             data.put("user.key", userCertAndKey.keyAsBase64String());
             data.put("user.crt", userCertAndKey.certAsBase64String());
@@ -142,7 +142,7 @@ public class KafkaUserModel {
             data.put("user.password", userCertAndKey.storePasswordAsBase64String());
             return createSecret(data);
         } else if (authentication instanceof KafkaUserScramSha512ClientAuthentication) {
-            Map<String, String> data = new HashMap<>();
+            Map<String, String> data = new HashMap<>(1);
             data.put(KafkaUserModel.KEY_PASSWORD, Base64.getEncoder().encodeToString(scramSha512Password.getBytes(StandardCharsets.US_ASCII)));
             return createSecret(data);
         } else {

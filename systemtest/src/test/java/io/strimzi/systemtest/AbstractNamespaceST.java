@@ -4,7 +4,7 @@
  */
 package io.strimzi.systemtest;
 
-import io.strimzi.api.kafka.model.KafkaMirrorMaker2Resources;
+import io.strimzi.api.kafka.model.KafkaMirrorMakerResources;
 import io.strimzi.api.kafka.model.KafkaResources;
 import io.strimzi.api.kafka.model.status.Condition;
 import io.strimzi.systemtest.cli.KafkaCmdClient;
@@ -36,7 +36,6 @@ public abstract class AbstractNamespaceST extends BaseST {
 
     static final String CO_NAMESPACE = "co-namespace-test";
     static final String SECOND_NAMESPACE = "second-namespace-test";
-    static final String USER_NAME = "my-user";
     private static final String TOPIC_EXAMPLES_DIR = "../examples/topic/kafka-topic.yaml";
 
     void checkKafkaInDiffNamespaceThanCO(String clusterName, String namespace) {
@@ -67,7 +66,7 @@ public abstract class AbstractNamespaceST extends BaseST {
         KafkaMirrorMakerResource.kafkaMirrorMaker(CLUSTER_NAME, kafkaSourceName, kafkaTargetName, "my-group", 1, false).done();
 
         LOGGER.info("Waiting for creation {} in namespace {}", CLUSTER_NAME + "-mirror-maker", SECOND_NAMESPACE);
-        DeploymentUtils.waitForDeploymentAndPodsReady(KafkaMirrorMaker2Resources.deploymentName(CLUSTER_NAME), 1);
+        DeploymentUtils.waitForDeploymentAndPodsReady(KafkaMirrorMakerResources.deploymentName(CLUSTER_NAME), 1);
         cluster.setNamespace(previousNamespace);
     }
 

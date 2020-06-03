@@ -69,7 +69,7 @@ public class KafkaExporter extends AbstractModel {
     /**
      * Constructor
      *
-     * @param resource Kubernetes/OpenShift resource with metadata containing the namespace and cluster name
+     * @param resource Kubernetes resource with metadata containing the namespace and cluster name
      */
     protected KafkaExporter(HasMetadata resource) {
         super(resource, APPLICATION_NAME);
@@ -186,7 +186,7 @@ public class KafkaExporter extends AbstractModel {
         List<ServicePort> ports = new ArrayList<>(1);
 
         ports.add(createServicePort(METRICS_PORT_NAME, METRICS_PORT, METRICS_PORT, "TCP"));
-        return createService("ClusterIP", ports, mergeLabelsOrAnnotations(getPrometheusAnnotations(), templateServiceAnnotations));
+        return createService("ClusterIP", ports, mergeLabelsOrAnnotations(prometheusAnnotations(), templateServiceAnnotations));
     }
 
     protected List<ContainerPort> getContainerPortList() {
@@ -218,7 +218,7 @@ public class KafkaExporter extends AbstractModel {
 
     @Override
     protected List<Container> getContainers(ImagePullPolicy imagePullPolicy) {
-        List<Container> containers = new ArrayList<>();
+        List<Container> containers = new ArrayList<>(1);
 
         Container container = new ContainerBuilder()
                 .withName(name)
@@ -250,6 +250,9 @@ public class KafkaExporter extends AbstractModel {
         varList.add(buildEnvVar(ENV_VAR_KAFKA_EXPORTER_TOPIC_REGEX, topicRegex));
         varList.add(buildEnvVar(ENV_VAR_KAFKA_EXPORTER_KAFKA_SERVER, KafkaCluster.serviceName(cluster) + ":" + KafkaCluster.REPLICATION_PORT));
         varList.add(buildEnvVar(ENV_VAR_KAFKA_EXPORTER_ENABLE_SARAMA, String.valueOf(saramaLoggingEnabled)));
+
+        // Add shared environment variables used for all containers
+        varList.addAll(getSharedEnvVars());
 
         addContainerEnvsToExistingEnvs(varList, templateContainerEnvVars);
 

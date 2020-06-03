@@ -116,8 +116,10 @@ public class KafkaConnectS2IAssemblyOperator extends AbstractConnectOperator<Ope
                 configMapOperations.get(namespace, ((ExternalLogging) connect.getLogging()).getName()) :
                 null);
 
-        HashMap<String, String> annotations = new HashMap<>();
+        HashMap<String, String> annotations = new HashMap<>(1);
         annotations.put(Annotations.STRIMZI_LOGGING_ANNOTATION, logAndMetricsConfigMap.getData().get(connect.ANCILLARY_CM_KEY_LOG_CONFIG));
+
+        boolean connectHasZeroReplicas = connect.getReplicas() == 0;
 
         log.debug("{}: Updating Kafka Connect S2I cluster", reconciliation);
 
@@ -144,7 +146,7 @@ public class KafkaConnectS2IAssemblyOperator extends AbstractConnectOperator<Ope
                 .compose(i -> networkPolicyOperator.reconcile(namespace, connect.getName(), connect.generateNetworkPolicy(pfa.isNamespaceAndPodSelectorNetworkPolicySupported(), isUseResources(kafkaConnectS2I))))
                 .compose(i -> deploymentConfigOperations.scaleDown(namespace, connect.getName(), connect.getReplicas()))
                 .compose(scale -> serviceOperations.reconcile(namespace, connect.getServiceName(), connect.generateService()))
-                .compose(i -> configMapOperations.reconcile(namespace, connect.getAncillaryConfigName(), logAndMetricsConfigMap))
+                .compose(i -> configMapOperations.reconcile(namespace, connect.getAncillaryConfigMapName(), logAndMetricsConfigMap))
                 .compose(i -> deploymentConfigOperations.reconcile(namespace, connect.getName(), connect.generateDeploymentConfig(annotations, pfa.isOpenshift(), imagePullPolicy, imagePullSecrets)))
                 .compose(i -> imagesStreamOperations.reconcile(namespace, KafkaConnectS2IResources.sourceImageStreamName(connect.getCluster()), connect.generateSourceImageStream()))
                 .compose(i -> imagesStreamOperations.reconcile(namespace, KafkaConnectS2IResources.targetImageStreamName(connect.getCluster()), connect.generateTargetImageStream()))
@@ -152,14 +154,17 @@ public class KafkaConnectS2IAssemblyOperator extends AbstractConnectOperator<Ope
                 .compose(i -> buildConfigOperations.reconcile(namespace, KafkaConnectS2IResources.buildConfigName(connect.getCluster()), connect.generateBuildConfig()))
                 .compose(i -> deploymentConfigOperations.scaleUp(namespace, connect.getName(), connect.getReplicas()))
                 .compose(i -> deploymentConfigOperations.waitForObserved(namespace, connect.getName(), 1_000, operationTimeoutMs))
-                .compose(i -> deploymentConfigOperations.readiness(namespace, connect.getName(), 1_000, operationTimeoutMs))
-                .compose(i -> reconcileConnectors(reconciliation, kafkaConnectS2I, kafkaConnectS2Istatus))
-                .setHandler(reconciliationResult -> {
+                .compose(i -> connectHasZeroReplicas ? Future.succeededFuture() : deploymentConfigOperations.readiness(namespace, connect.getName(), 1_000, operationTimeoutMs))
+                .compose(i -> reconcileConnectors(reconciliation, kafkaConnectS2I, kafkaConnectS2Istatus, connectHasZeroReplicas))
+                .onComplete(reconciliationResult -> {
                     StatusUtils.setStatusConditionAndObservedGeneration(kafkaConnectS2I, kafkaConnectS2Istatus, reconciliationResult);
-                    kafkaConnectS2Istatus.setUrl(KafkaConnectS2IResources.url(connect.getCluster(), namespace, KafkaConnectS2ICluster.REST_API_PORT));
-                    kafkaConnectS2Istatus.setBuildConfigName(KafkaConnectS2IResources.buildConfigName(connect.getCluster()));
 
-                    updateStatus(kafkaConnectS2I, reconciliation, kafkaConnectS2Istatus).setHandler(statusResult -> {
+                    if (!connectHasZeroReplicas) {
+                        kafkaConnectS2Istatus.setUrl(KafkaConnectS2IResources.url(connect.getCluster(), namespace, KafkaConnectS2ICluster.REST_API_PORT));
+                        kafkaConnectS2Istatus.setBuildConfigName(KafkaConnectS2IResources.buildConfigName(connect.getCluster()));
+                    }
+
+                    updateStatus(kafkaConnectS2I, reconciliation, kafkaConnectS2Istatus).onComplete(statusResult -> {
                         // If both features succeeded, createOrUpdate succeeded as well
                         // If one or both of them failed, we prefer the reconciliation failure as the main error
                         if (reconciliationResult.succeeded() && statusResult.succeeded()) {
@@ -187,7 +192,7 @@ public class KafkaConnectS2IAssemblyOperator extends AbstractConnectOperator<Ope
     Future<Void> updateStatus(KafkaConnectS2I kafkaConnectS2Iassembly, Reconciliation reconciliation, KafkaConnectS2IStatus desiredStatus) {
         Promise<Void> updateStatusPromise = Promise.promise();
 
-        resourceOperator.getAsync(kafkaConnectS2Iassembly.getMetadata().getNamespace(), kafkaConnectS2Iassembly.getMetadata().getName()).setHandler(getRes -> {
+        resourceOperator.getAsync(kafkaConnectS2Iassembly.getMetadata().getNamespace(), kafkaConnectS2Iassembly.getMetadata().getName()).onComplete(getRes -> {
             if (getRes.succeeded()) {
                 KafkaConnectS2I connect = getRes.result();
 
@@ -203,7 +208,7 @@ public class KafkaConnectS2IAssemblyOperator extends AbstractConnectOperator<Ope
                         if (!ksDiff.isEmpty()) {
                             KafkaConnectS2I resourceWithNewStatus = new KafkaConnectS2IBuilder(connect).withStatus(desiredStatus).build();
 
-                            ((CrdOperator<OpenShiftClient, KafkaConnectS2I, KafkaConnectS2IList, DoneableKafkaConnectS2I>) resourceOperator).updateStatusAsync(resourceWithNewStatus).setHandler(updateRes -> {
+                            ((CrdOperator<OpenShiftClient, KafkaConnectS2I, KafkaConnectS2IList, DoneableKafkaConnectS2I>) resourceOperator).updateStatusAsync(resourceWithNewStatus).onComplete(updateRes -> {
                                 if (updateRes.succeeded()) {
                                     log.debug("{}: Completed status update", reconciliation);
                                     updateStatusPromise.complete();

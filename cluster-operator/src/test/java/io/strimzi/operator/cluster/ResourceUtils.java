@@ -4,6 +4,7 @@
  */
 package io.strimzi.operator.cluster;
 
+import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.LoadBalancerIngressBuilder;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
@@ -44,7 +45,6 @@ import io.strimzi.api.kafka.model.KafkaSpec;
 import io.strimzi.api.kafka.model.Logging;
 import io.strimzi.api.kafka.model.Probe;
 import io.strimzi.api.kafka.model.ProbeBuilder;
-import io.strimzi.api.kafka.model.TopicOperatorSpec;
 import io.strimzi.api.kafka.model.ZookeeperClusterSpec;
 import io.strimzi.api.kafka.model.listener.KafkaListenerPlain;
 import io.strimzi.api.kafka.model.listener.KafkaListenerTls;
@@ -115,6 +115,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
@@ -359,7 +360,6 @@ public class ResourceUtils {
                                            Map<String, Object> zooConfiguration,
                                            Storage kafkaStorage,
                                            SingleVolumeStorage zkStorage,
-                                           TopicOperatorSpec topicOperatorSpec,
                                            Logging kafkaLogging, Logging zkLogging,
                                            KafkaExporterSpec keSpec,
                                            CruiseControlSpec ccSpec) {
@@ -412,7 +412,6 @@ public class ResourceUtils {
             zk.setMetrics(metricsCm);
         }
 
-        spec.setTopicOperator(topicOperatorSpec);
         spec.setKafkaExporter(keSpec);
         spec.setCruiseControl(ccSpec);
 
@@ -645,7 +644,7 @@ public class ResourceUtils {
     public static ZookeeperScalerProvider zookeeperScalerProvider() {
         return new ZookeeperScalerProvider() {
             @Override
-            public ZookeeperScaler createZookeeperScaler(Vertx vertx, String zookeeperConnectionString, Secret clusterCaCertSecret, Secret coKeySecret, long operationTimeoutMs) {
+            public ZookeeperScaler createZookeeperScaler(Vertx vertx, String zookeeperConnectionString, Function<Integer, String> zkNodeAddress, Secret clusterCaCertSecret, Secret coKeySecret, long operationTimeoutMs) {
                 ZookeeperScaler mockZooScaler = mock(ZookeeperScaler.class);
                 when(mockZooScaler.scale(anyInt())).thenReturn(Future.succeededFuture());
                 return mockZooScaler;
@@ -694,7 +693,7 @@ public class ResourceUtils {
                 mock(NetworkPolicyOperator.class), mock(PodDisruptionBudgetOperator.class), mock(PodOperator.class),
                 mock(IngressOperator.class), mock(ImageStreamOperator.class), mock(BuildConfigOperator.class),
                 mock(DeploymentConfigOperator.class), mock(CrdOperator.class), mock(CrdOperator.class), mock(CrdOperator.class),
-                mock(CrdOperator.class), mock(CrdOperator.class), mock(CrdOperator.class), mock(CrdOperator.class),
+                mock(CrdOperator.class), mock(CrdOperator.class), mock(CrdOperator.class), mock(CrdOperator.class), mock(CrdOperator.class),
                 mock(StorageClassOperator.class), mock(NodeOperator.class), zookeeperScalerProvider(), metricsProvider());
         when(supplier.serviceAccountOperations.reconcile(anyString(), anyString(), any())).thenReturn(Future.succeededFuture());
         when(supplier.roleBindingOperations.reconcile(anyString(), anyString(), any())).thenReturn(Future.succeededFuture());
@@ -755,5 +754,15 @@ public class ResourceUtils {
 
     public static ClusterOperatorConfig dummyClusterOperatorConfig() {
         return dummyClusterOperatorConfig(new KafkaVersion.Lookup(emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap()));
+    }
+
+    /**
+     * Find the first resource in the given resources with the given name.
+     * @param resources The secrets to search.
+     * @param name The secret name.
+     * @return The secret with that name.
+     */
+    public static <T extends HasMetadata> T findResourceWithName(List<T> resources, String name) {
+        return resources.stream().filter(s -> s.getMetadata().getName().equals(name)).findFirst().orElse(null);
     }
 }

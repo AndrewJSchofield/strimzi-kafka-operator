@@ -17,6 +17,8 @@ import io.strimzi.systemtest.logs.TestExecutionWatcher;
 import io.strimzi.systemtest.resources.KubernetesResource;
 import io.strimzi.systemtest.resources.ResourceManager;
 import io.strimzi.systemtest.utils.StUtils;
+import io.strimzi.systemtest.utils.kafkaUtils.KafkaTopicUtils;
+import io.strimzi.systemtest.utils.kafkaUtils.KafkaUserUtils;
 import io.strimzi.systemtest.utils.kubeUtils.objects.PodUtils;
 import io.strimzi.test.TestUtils;
 import io.strimzi.test.executor.Exec;
@@ -24,6 +26,7 @@ import io.strimzi.test.k8s.HelmClient;
 import io.strimzi.test.k8s.KubeClusterResource;
 import io.strimzi.test.k8s.cluster.Minishift;
 import io.strimzi.test.k8s.cluster.OpenShift;
+import io.strimzi.test.timemeasuring.Operation;
 import io.strimzi.test.timemeasuring.TimeMeasuringSystem;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -83,7 +86,6 @@ public abstract class BaseST implements TestSeparator {
     protected static final String TO_IMAGE = "STRIMZI_DEFAULT_TOPIC_OPERATOR_IMAGE";
     protected static final String UO_IMAGE = "STRIMZI_DEFAULT_USER_OPERATOR_IMAGE";
     protected static final String KAFKA_INIT_IMAGE = "STRIMZI_DEFAULT_KAFKA_INIT_IMAGE";
-    protected static final String TLS_SIDECAR_ZOOKEEPER_IMAGE = "STRIMZI_DEFAULT_TLS_SIDECAR_ZOOKEEPER_IMAGE";
     protected static final String TLS_SIDECAR_KAFKA_IMAGE = "STRIMZI_DEFAULT_TLS_SIDECAR_KAFKA_IMAGE";
     protected static final String TLS_SIDECAR_EO_IMAGE = "STRIMZI_DEFAULT_TLS_SIDECAR_ENTITY_OPERATOR_IMAGE";
     protected static final String TEST_TOPIC_NAME = "test-topic";
@@ -104,8 +106,10 @@ public abstract class BaseST implements TestSeparator {
     protected Random rng = new Random();
 
     public static final int MESSAGE_COUNT = 100;
-    public static final String TOPIC_NAME = "my-topic";
-    public static final String USER_NAME = "user-name-example";
+    public static final String TOPIC_NAME = KafkaTopicUtils.generateRandomNameOfTopic();
+    public static final String EXAMPLE_TOPIC_NAME = "my-topic";
+
+    public static final String USER_NAME = KafkaUserUtils.generateRandomNameOfKafkaUser();
 
     private HelmClient helmClient() {
         return cluster.helmClient().namespace(cluster.getNamespace());
@@ -331,11 +335,12 @@ public abstract class BaseST implements TestSeparator {
      * Deploy CO via helm chart. Using config file stored in test resources.
      */
     public void deployClusterOperatorViaHelmChart() {
+        String dockerReg = Environment.STRIMZI_REGISTRY;
         String dockerOrg = Environment.STRIMZI_ORG;
         String dockerTag = Environment.STRIMZI_TAG;
 
         Map<String, String> values = Collections.unmodifiableMap(Stream.of(
-            entry("imageRepositoryOverride", dockerOrg),
+            entry("imageRepositoryOverride", dockerReg + "/" + dockerOrg),
             entry("imageTagOverride", dockerTag),
             entry("image.pullPolicy", Environment.OPERATOR_IMAGE_PULL_POLICY),
             entry("resources.requests.memory", REQUESTS_MEMORY),
@@ -346,6 +351,8 @@ public abstract class BaseST implements TestSeparator {
             .collect(TestUtils.entriesToMap()));
 
         LOGGER.info("Creating cluster operator with Helm Chart before test class {}", testClass);
+        // We need to delete all CRDs before install Strimzi via helm, otherwise install fail when some CRD is already created
+        cmdKubeClient().delete(KubeClusterResource.CO_INSTALL_DIR);
         Path pathToChart = new File(HELM_CHART).toPath();
         String oldNamespace = cluster.setNamespace("kube-system");
         InputStream helmAccountAsStream = getClass().getClassLoader().getResourceAsStream("helm/helm-service-account.yaml");
@@ -691,8 +698,6 @@ public abstract class BaseST implements TestSeparator {
         for (int i = 0; i < zkPods; i++) {
             String imgFromPod = PodUtils.getContainerImageNameFromPod(KafkaResources.zookeeperPodName(clusterName, i), "zookeeper");
             assertThat("Zookeeper pod " + i + " uses wrong image", TestUtils.parseImageMap(imgFromDeplConf.get(KAFKA_IMAGE_MAP)).get(kafkaVersion), is(imgFromPod));
-            imgFromPod = PodUtils.getContainerImageNameFromPod(KafkaResources.zookeeperPodName(clusterName, i), "tls-sidecar");
-            assertThat("Zookeeper TLS side car for pod " + i + " uses wrong image", imgFromDeplConf.get(TLS_SIDECAR_ZOOKEEPER_IMAGE), is(imgFromPod));
         }
 
         //Verifying docker image for kafka pods
@@ -737,9 +742,11 @@ public abstract class BaseST implements TestSeparator {
 
     @AfterEach
     void teardownEnvironmentMethod(ExtensionContext context) throws Exception {
+        TimeMeasuringSystem.getInstance().stopOperation(Operation.TEST_EXECUTION);
         AssertionError assertionError = null;
         try {
-            assertNoCoErrorsLogged(0);
+            long testDuration = timeMeasuringSystem.getDurationInSeconds(context.getTestClass().get().getName(), context.getTestMethod().get().getName(), Operation.TEST_EXECUTION.name());
+            assertNoCoErrorsLogged(testDuration);
         } catch (AssertionError e) {
             LOGGER.error("Cluster Operator contains unexpected errors!");
             assertionError = new AssertionError(e);

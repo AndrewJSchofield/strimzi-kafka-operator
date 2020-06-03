@@ -115,7 +115,7 @@ public class KafkaConnectCluster extends AbstractModel {
     /**
      * Constructor
      *
-     * @param resource Kubernetes/OpenShift resource with metadata containing the namespace and cluster name
+     * @param resource Kubernetes resource with metadata containing the namespace and cluster name
      */
     protected KafkaConnectCluster(HasMetadata resource) {
         this(resource, APPLICATION_NAME);
@@ -124,14 +124,14 @@ public class KafkaConnectCluster extends AbstractModel {
     /**
      * Constructor
      *
-     * @param resource Kubernetes/OpenShift resource with metadata containing the namespace and cluster name
+     * @param resource Kubernetes resource with metadata containing the namespace and cluster name
      * @param applicationName configurable allow other classes to extend this class
      */
     protected KafkaConnectCluster(HasMetadata resource, String applicationName) {
         super(resource, applicationName);
         this.name = KafkaConnectResources.deploymentName(cluster);
         this.serviceName = KafkaConnectResources.serviceName(cluster);
-        this.ancillaryConfigName = KafkaConnectResources.metricsAndLogConfigMapName(cluster);
+        this.ancillaryConfigMapName = KafkaConnectResources.metricsAndLogConfigMapName(cluster);
         this.replicas = DEFAULT_REPLICAS;
         this.readinessPath = "/";
         this.readinessProbeOptions = DEFAULT_HEALTHCHECK_OPTIONS;
@@ -286,7 +286,7 @@ public class KafkaConnectCluster extends AbstractModel {
             ports.add(createServicePort(METRICS_PORT_NAME, METRICS_PORT, METRICS_PORT, "TCP"));
         }
 
-        return createService("ClusterIP", ports, mergeLabelsOrAnnotations(getPrometheusAnnotations(), templateServiceAnnotations));
+        return createService("ClusterIP", ports, mergeLabelsOrAnnotations(prometheusAnnotations(), templateServiceAnnotations));
     }
 
     protected List<ContainerPort> getContainerPortList() {
@@ -301,7 +301,7 @@ public class KafkaConnectCluster extends AbstractModel {
 
     protected List<Volume> getVolumes(boolean isOpenShift) {
         List<Volume> volumeList = new ArrayList<>(1);
-        volumeList.add(VolumeUtils.createConfigMapVolume(logAndMetricsConfigVolumeName, ancillaryConfigName));
+        volumeList.add(VolumeUtils.createConfigMapVolume(logAndMetricsConfigVolumeName, ancillaryConfigMapName));
 
         if (tls != null) {
             List<CertSecretSource> trustedCertificates = tls.getTrustedCertificates();
@@ -437,7 +437,7 @@ public class KafkaConnectCluster extends AbstractModel {
     @Override
     protected List<Container> getContainers(ImagePullPolicy imagePullPolicy) {
 
-        List<Container> containers = new ArrayList<>();
+        List<Container> containers = new ArrayList<>(1);
 
         Container container = new ContainerBuilder()
                 .withName(name)
@@ -500,6 +500,9 @@ public class KafkaConnectCluster extends AbstractModel {
         if (tracing != null) {
             varList.add(buildEnvVar(ENV_VAR_STRIMZI_TRACING, tracing.getType()));
         }
+
+        // Add shared environment variables used for all containers
+        varList.addAll(getSharedEnvVars());
 
         varList.addAll(getExternalConfigurationEnvVars());
 

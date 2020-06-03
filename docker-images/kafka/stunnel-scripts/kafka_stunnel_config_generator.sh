@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # path were the Secret with broker certificates is mounted
 KAFKA_CERTS_KEYS=/etc/tls-sidecar/kafka-brokers
@@ -11,6 +12,7 @@ CURRENT=${BASE_HOSTNAME}-${KAFKA_BROKER_ID}
 echo "pid = /usr/local/var/run/stunnel.pid"
 echo "foreground = yes"
 echo "debug = $TLS_SIDECAR_LOG_LEVEL"
+echo "sslVersion = TLSv1.2"
 
 cat <<-EOF
 [zookeeper-2181]

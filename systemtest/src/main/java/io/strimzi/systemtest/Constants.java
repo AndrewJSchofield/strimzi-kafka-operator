@@ -47,8 +47,13 @@ public interface Constants {
     long GLOBAL_TRACING_POLL = Duration.ofSeconds(30).toMillis();
     long GLOBAL_TRACING_TIMEOUT =  Duration.ofMinutes(7).toMillis();
 
+    long API_CRUISE_CONTROL_POLL = Duration.ofSeconds(5).toMillis();
+    long API_CRUISE_CONTROL_TIMEOUT = Duration.ofMinutes(10).toMillis();
+    long GLOBAL_CRUISE_CONTROL_TIMEOUT = Duration.ofSeconds(20).toMillis();
+
     long GLOBAL_CLIENTS_POLL = Duration.ofSeconds(15).toMillis();
     long GLOBAL_CLIENTS_TIMEOUT = Duration.ofMinutes(2).toMillis();
+    long HUGE_CLIENTS_TIMEOUT = Duration.ofMinutes(30).toMillis();
     long GLOBAL_CLIENTS_EXCEPT_ERROR_TIMEOUT = Duration.ofSeconds(10).toMillis();
 
     long CO_OPERATION_TIMEOUT_DEFAULT = Duration.ofMinutes(5).toMillis();
@@ -82,6 +87,7 @@ public interface Constants {
     int COMPONENTS_METRICS_PORT = 9404;
     int CLUSTER_OPERATOR_METRICS_PORT = 8080;
     int USER_OPERATOR_METRICS_PORT = 8081;
+    int TOPIC_OPERATOR_METRICS_PORT = 8080;
 
     String DEPLOYMENT = "Deployment";
     String SERVICE = "Service";
@@ -236,4 +242,9 @@ public interface Constants {
      * Tag for tests where metrics are used
      */
     String METRICS = "metrics";
+
+    /**
+     * Tag for tests where cruise control used
+     */
+    String CRUISE_CONTROL = "cruisecontrol";
 }

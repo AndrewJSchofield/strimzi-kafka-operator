@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # path were the Secret with Cruise Control certificates is mounted
 CC_CERTS_KEYS=/etc/tls-sidecar/cc-certs
@@ -9,6 +10,7 @@ cat /etc/tls-sidecar/cluster-ca-certs/*.crt > "$CA_CERTS"
 echo "pid = /usr/local/var/run/stunnel.pid"
 echo "foreground = yes"
 echo "debug = $TLS_SIDECAR_LOG_LEVEL"
+echo "sslVersion = TLSv1.2"
 
 cat <<-EOF
 [zookeeper-2181]

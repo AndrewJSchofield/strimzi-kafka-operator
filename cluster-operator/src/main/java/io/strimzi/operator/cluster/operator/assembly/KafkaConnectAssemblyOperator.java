@@ -111,7 +111,7 @@ public class KafkaConnectAssemblyOperator extends AbstractConnectOperator<Kubern
                 configMapOperations.get(namespace, ((ExternalLogging) connect.getLogging()).getName()) :
                 null);
 
-        Map<String, String> annotations = new HashMap<>();
+        Map<String, String> annotations = new HashMap<>(1);
         annotations.put(Annotations.STRIMZI_LOGGING_ANNOTATION, logAndMetricsConfigMap.getData().get(connect.ANCILLARY_CM_KEY_LOG_CONFIG));
 
         log.debug("{}: Updating Kafka Connect cluster", reconciliation);
@@ -122,6 +122,8 @@ public class KafkaConnectAssemblyOperator extends AbstractConnectOperator<Kubern
         } else {
             connectS2ICheck = Future.succeededFuture(null);
         }
+
+        boolean connectHasZeroReplicas = connect.getReplicas() == 0;
 
         connectS2ICheck
                 .compose(otherConnect -> {
@@ -138,19 +140,22 @@ public class KafkaConnectAssemblyOperator extends AbstractConnectOperator<Kubern
                 .compose(i -> networkPolicyOperator.reconcile(namespace, connect.getName(), connect.generateNetworkPolicy(pfa.isNamespaceAndPodSelectorNetworkPolicySupported(), isUseResources(kafkaConnect))))
                 .compose(i -> deploymentOperations.scaleDown(namespace, connect.getName(), connect.getReplicas()))
                 .compose(scale -> serviceOperations.reconcile(namespace, connect.getServiceName(), connect.generateService()))
-                .compose(i -> configMapOperations.reconcile(namespace, connect.getAncillaryConfigName(), logAndMetricsConfigMap))
+                .compose(i -> configMapOperations.reconcile(namespace, connect.getAncillaryConfigMapName(), logAndMetricsConfigMap))
                 .compose(i -> podDisruptionBudgetOperator.reconcile(namespace, connect.getName(), connect.generatePodDisruptionBudget()))
                 .compose(i -> deploymentOperations.reconcile(namespace, connect.getName(), connect.generateDeployment(annotations, pfa.isOpenshift(), imagePullPolicy, imagePullSecrets)))
                 .compose(i -> deploymentOperations.scaleUp(namespace, connect.getName(), connect.getReplicas()))
                 .compose(i -> deploymentOperations.waitForObserved(namespace, connect.getName(), 1_000, operationTimeoutMs))
-                .compose(i -> deploymentOperations.readiness(namespace, connect.getName(), 1_000, operationTimeoutMs))
-                .compose(i -> reconcileConnectors(reconciliation, kafkaConnect, kafkaConnectStatus))
-                .setHandler(reconciliationResult -> {
+                .compose(i -> connectHasZeroReplicas ? Future.succeededFuture() : deploymentOperations.readiness(namespace, connect.getName(), 1_000, operationTimeoutMs))
+                .compose(i -> reconcileConnectors(reconciliation, kafkaConnect, kafkaConnectStatus, connectHasZeroReplicas))
+                .onComplete(reconciliationResult -> {
                     StatusUtils.setStatusConditionAndObservedGeneration(kafkaConnect, kafkaConnectStatus, reconciliationResult);
-                    kafkaConnectStatus.setUrl(KafkaConnectResources.url(connect.getCluster(), namespace, KafkaConnectCluster.REST_API_PORT));
+
+                    if (!connectHasZeroReplicas) {
+                        kafkaConnectStatus.setUrl(KafkaConnectResources.url(connect.getCluster(), namespace, KafkaConnectCluster.REST_API_PORT));
+                    }
 
                     this.maybeUpdateStatusCommon(resourceOperator, kafkaConnect, reconciliation, kafkaConnectStatus,
-                        (connect1, status) -> new KafkaConnectBuilder(connect1).withStatus(status).build()).setHandler(statusResult -> {
+                        (connect1, status) -> new KafkaConnectBuilder(connect1).withStatus(status).build()).onComplete(statusResult -> {
                             // If both features succeeded, createOrUpdate succeeded as well
                             // If one or both of them failed, we prefer the reconciliation failure as the main error
                             if (reconciliationResult.succeeded() && statusResult.succeeded()) {

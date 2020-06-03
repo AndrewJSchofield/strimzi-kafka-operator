@@ -13,16 +13,12 @@ import io.strimzi.api.kafka.model.DoneableKafkaBridge;
 import io.strimzi.api.kafka.model.KafkaBridge;
 import io.strimzi.api.kafka.model.KafkaBridgeBuilder;
 import io.strimzi.systemtest.Constants;
-import io.strimzi.systemtest.utils.kafkaUtils.KafkaBridgeUtils;
 import io.strimzi.test.TestUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import io.strimzi.systemtest.resources.ResourceManager;
 
 import java.util.function.Consumer;
 
 public class KafkaBridgeResource {
-    private static final Logger LOGGER = LogManager.getLogger(KafkaBridgeResource.class);
 
     public static final String PATH_TO_KAFKA_BRIDGE_CONFIG = "../examples/kafka-bridge/kafka-bridge.yaml";
 
@@ -37,6 +33,31 @@ public class KafkaBridgeResource {
     public static DoneableKafkaBridge kafkaBridge(String name, String clusterName, String bootstrap, int kafkaBridgeReplicas) {
         KafkaBridge kafkaBridge = getKafkaBridgeFromYaml(PATH_TO_KAFKA_BRIDGE_CONFIG);
         return deployKafkaBridge(defaultKafkaBridge(kafkaBridge, name, clusterName, bootstrap, kafkaBridgeReplicas).build());
+    }
+
+    public static DoneableKafkaBridge kafkaBridgeWithCors(String name, String bootstrap, int kafkaBridgeReplicas,
+                                                          String allowedCorsOrigin, String allowedCorsMethods) {
+        return kafkaBridgeWithCors(name, name, bootstrap, kafkaBridgeReplicas, allowedCorsOrigin, allowedCorsMethods);
+    }
+
+    public static DoneableKafkaBridge kafkaBridgeWithCors(String name, String clusterName, String bootstrap,
+                                                          int kafkaBridgeReplicas, String allowedCorsOrigin,
+                                                          String allowedCorsMethods) {
+        KafkaBridge kafkaBridge = getKafkaBridgeFromYaml(PATH_TO_KAFKA_BRIDGE_CONFIG);
+
+        KafkaBridgeBuilder kafkaBridgeBuilder = defaultKafkaBridge(kafkaBridge, name, clusterName, bootstrap, kafkaBridgeReplicas);
+
+        kafkaBridgeBuilder
+            .editSpec()
+                .editHttp()
+                    .withNewCors()
+                        .withAllowedOrigins(allowedCorsOrigin)
+                        .withAllowedMethods(allowedCorsMethods != null ? allowedCorsMethods : "GET,POST,PUT,DELETE,OPTIONS,PATCH")
+                    .endCors()
+                .endHttp()
+            .endSpec();
+
+        return deployKafkaBridge(kafkaBridgeBuilder.build());
     }
 
     private static KafkaBridgeBuilder defaultKafkaBridge(KafkaBridge kafkaBridge, String name, String kafkaClusterName, String bootstrap, int kafkaBridgeReplicas) {
@@ -80,8 +101,8 @@ public class KafkaBridgeResource {
         return kafkaBridge;
     }
 
-    public static void deleteKafkaBridgeWithoutWait(KafkaBridge kafkaBridge) {
-        kafkaBridgeClient().inNamespace(ResourceManager.kubeClient().getNamespace()).delete(kafkaBridge);
+    public static void deleteKafkaBridgeWithoutWait(String resourceName) {
+        kafkaBridgeClient().inNamespace(ResourceManager.kubeClient().getNamespace()).withName(resourceName).cascading(true).delete();
     }
 
     private static KafkaBridge getKafkaBridgeFromYaml(String yamlPath) {
@@ -89,13 +110,7 @@ public class KafkaBridgeResource {
     }
 
     private static KafkaBridge waitFor(KafkaBridge kafkaBridge) {
-        String kafkaBridgeCrName = kafkaBridge.getMetadata().getName();
-
-        LOGGER.info("Waiting for KafkaBridge {}", kafkaBridgeCrName);
-        KafkaBridgeUtils.waitForKafkaBridgeReady(kafkaBridgeCrName);
-        LOGGER.info("KafkaBridge {} is ready", kafkaBridgeCrName);
-
-        return kafkaBridge;
+        return ResourceManager.waitForResourceStatus(kafkaBridgeClient(), kafkaBridge, "Ready");
     }
 
     private static KafkaBridge deleteLater(KafkaBridge kafkaBridge) {

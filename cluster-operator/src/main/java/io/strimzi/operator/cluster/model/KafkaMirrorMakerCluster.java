@@ -110,13 +110,13 @@ public class KafkaMirrorMakerCluster extends AbstractModel {
     /**
      * Constructor
      *
-     * @param resource Kubernetes/OpenShift resource with metadata containing the namespace and cluster name
+     * @param resource Kubernetes resource with metadata containing the namespace and cluster name
      */
     protected KafkaMirrorMakerCluster(HasMetadata resource) {
         super(resource, APPLICATION_NAME);
         this.name = KafkaMirrorMakerResources.deploymentName(cluster);
         this.serviceName = KafkaMirrorMakerResources.serviceName(cluster);
-        this.ancillaryConfigName = KafkaMirrorMakerResources.metricsAndLogConfigMapName(cluster);
+        this.ancillaryConfigMapName = KafkaMirrorMakerResources.metricsAndLogConfigMapName(cluster);
         this.replicas = DEFAULT_REPLICAS;
         this.readinessPath = "/";
         this.readinessProbeOptions = READINESS_PROBE_OPTIONS;
@@ -239,7 +239,7 @@ public class KafkaMirrorMakerCluster extends AbstractModel {
 
     protected List<Volume> getVolumes(boolean isOpenShift) {
         List<Volume> volumeList = new ArrayList<>(1);
-        volumeList.add(VolumeUtils.createConfigMapVolume(logAndMetricsConfigVolumeName, ancillaryConfigName));
+        volumeList.add(VolumeUtils.createConfigMapVolume(logAndMetricsConfigVolumeName, ancillaryConfigMapName));
 
         createClientSecretVolume(producer, volumeList, "producer-oauth-certs", isOpenShift);
         createClientSecretVolume(consumer, volumeList, "consumer-oauth-certs", isOpenShift);
@@ -316,7 +316,7 @@ public class KafkaMirrorMakerCluster extends AbstractModel {
     @Override
     protected List<Container> getContainers(ImagePullPolicy imagePullPolicy) {
 
-        List<Container> containers = new ArrayList<>();
+        List<Container> containers = new ArrayList<>(1);
 
         Container container = new ContainerBuilder()
                 .withName(name)
@@ -407,6 +407,9 @@ public class KafkaMirrorMakerCluster extends AbstractModel {
                 String.valueOf(livenessProbeOptions.getPeriodSeconds() != null ? livenessProbeOptions.getPeriodSeconds() : DEFAULT_HEALTHCHECK_PERIOD)));
         varList.add(buildEnvVar(ENV_VAR_STRIMZI_READINESS_PERIOD,
                 String.valueOf(readinessProbeOptions.getPeriodSeconds() != null ? readinessProbeOptions.getPeriodSeconds() : DEFAULT_HEALTHCHECK_PERIOD)));
+
+        // Add shared environment variables used for all containers
+        varList.addAll(getSharedEnvVars());
 
         addContainerEnvsToExistingEnvs(varList, templateContainerEnvVars);
 

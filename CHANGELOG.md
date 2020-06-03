@@ -1,6 +1,10 @@
 
 # CHANGELOG
 
+## 0.19.0
+
+* Remove deprecated `Kafka.spec.topicOperator` classes and deployment logic 
+
 ## 0.18.0
 
 * Add possibility to set Java System Properties for User Operator and Topic Operator via `Kafka` CR.
@@ -13,6 +17,12 @@
 * Allow standalone User Operator to modify status on KafkaUser
 * Add support for Kafka 2.4.1
 * Add support for Kafka 2.5.0
+* Remove TLS sidecars from ZooKeeper pods, using native ZooKeeper TLS support instead
+* Add metrics for Topic Operator
+* Use Strimzi Kafka Bridge 0.16.0
+* Add support for CORS in the HTTP Kafka Bridge
+* Pass HTTP Proxy configuration from operator to operands
+* Add Cruise Control support, KafkaRebalance resource and rebalance operator
 
 ## 0.17.0
 
